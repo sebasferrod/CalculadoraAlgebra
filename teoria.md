@@ -1,0 +1,7 @@
+# Algebra lineal
+### Coseno del angulo entre dos vectores, proyecciones y proporciones de estos.
+El producto punto entre dos vectores da informacion del alineamiento entre estos.
+Al dividir el producto punto entre la multiplicacion de los modulos de los dos vectores se obtiene el coseno del angulo entre ellos.
+Para visualizar mejor sus propiedades imaginese el producto punto de un vector por si mismo dividido por el cuadrado de su modulo. El resultado seria 1. Si este numero multiplica al vector original da el mismo.
+Ahora si se divide el producto punto, entre dos vectores distintos, sean v1 y v2, por el cuadrado del modulo de uno de los vectores, sea v1, da el escalar por el que se tiene que multiplicar al vector v1 para obtener la proyeccion del otro vector v2 sobre el vector v1. Da la proporcion de la proyeccion de v2 sobre v1.
+Se puede decir que la multiplicacion de los modulos de los vectores dan en caso de ser de dos vectores distintos la proporcion entre ambos y eso divide a la informacion del angulo o su superpocicion. Si se divide a la informacion de superposicion por el cuadrado del modulo de uno de los vectores da un escalar que posee informacion de como se proyecta el otro vector sobre el otro.
