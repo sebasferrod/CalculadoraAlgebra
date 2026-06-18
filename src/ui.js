@@ -44,10 +44,28 @@ function crearTarjetaOperacion(tipo, id, valores, modulo, operandos, expr) {
       break;
 
     case "modulo":
-      titulo = `|${operandos[0]}|`;
+      titulo = id;
       contenido = `
         <div class="tarjeta-valores">${valores}</div>
         <div class="tarjeta-modulo">|${operandos[0]}| = ${modulo.toFixed(4)}</div>
+      `;
+      break;
+
+    case "punto":
+      titulo = id;
+      contenido = `
+        <div class="tarjeta-valores">${valores}</div>
+        <div class="tarjeta-modulo">${modulo.toFixed(4)}</div>
+        <div class="tarjeta-padres">${operandos[0]} · ${operandos[1]}</div>
+      `;
+      break;
+
+    case "escalar":
+      titulo = id;
+      contenido = `
+        <div class="tarjeta-valores">${valores}</div>
+        <div class="tarjeta-modulo">${modulo.toFixed(4)}</div>
+        <div class="tarjeta-padres">${operandos[0]} ${simboloEscalar(id)} ${operandos[1]}</div>
       `;
       break;
 
@@ -72,6 +90,14 @@ function crearTarjetaOperacion(tipo, id, valores, modulo, operandos, expr) {
 function eliminarTarjeta(id) {
   const existente = panelTarjetas.querySelector(`.tarjeta[data-id="${id}"]`);
   if (existente) existente.remove();
+}
+
+function simboloEscalar(id) {
+  if (id.startsWith("suma_")) return "+";
+  if (id.startsWith("resta_")) return "−";
+  if (id.startsWith("mult_")) return "×";
+  if (id.startsWith("div_")) return "÷";
+  return "?";
 }
 
 // ── Errores visibles ──

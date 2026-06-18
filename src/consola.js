@@ -11,6 +11,59 @@ import { crearTarjetaVector, crearTarjetaOperacion, eliminarTarjeta, mostrarErro
 
 // Almacén de vectores: nombre -> Vector
 const vectores = new Map();
+// Almacén de escalares: nombre -> número
+const escalares = new Map();
+// Metadatos para recrear tarjetas: nombre -> { tarjeta, expr, ops }
+const metas = new Map();
+
+// ── Persistencia con localStorage ──
+const STORAGE_KEY = "calculadora-vectores";
+
+function guardarEstado() {
+  const datos = [];
+  for (const [nombre, v] of vectores) {
+    const meta = metas.get(nombre) || {};
+    datos.push({ n: nombre, v: [...v.x], d: v.getDimensiones(), t: "v", c: meta.tarjeta || "def", e: meta.expr || "", o: meta.ops || [] });
+  }
+  for (const [nombre, val] of escalares) {
+    const meta = metas.get(nombre) || {};
+    datos.push({ n: nombre, v: [val], d: 1, t: "e", c: meta.tarjeta || "escalar", e: meta.expr || "", o: meta.ops || [] });
+  }
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(datos));
+}
+
+function cargarEstado() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const datos = JSON.parse(raw);
+    for (const item of datos) {
+      if (item.t === "e") {
+        escalares.set(item.n, item.v[0]);
+        metas.set(item.n, { tarjeta: item.c, expr: item.e, ops: item.o });
+        if (item.c === "punto") {
+          crearTarjetaOperacion("punto", item.n, item.e, item.v[0], item.o, "");
+        } else if (item.c === "modulo") {
+          crearTarjetaOperacion("modulo", item.n, `(${item.o[0]})`, item.v[0], item.o, item.e);
+        } else {
+          crearTarjetaOperacion("escalar", item.n, item.e, item.v[0], item.o, "");
+        }
+      } else {
+        const v = new Vector(item.d, item.v);
+        vectores.set(item.n, v);
+        metas.set(item.n, { tarjeta: item.c, expr: item.e, ops: item.o });
+        if (item.c === "def" || item.c === "escvec") {
+          crearTarjetaVector(item.n, v);
+        } else {
+          crearTarjetaOperacion("vector", item.n, `(${v.x.join(", ")})`, v.modulo(), item.o, item.e);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("No se pudo restaurar el estado guardado:", e.message);
+    localStorage.removeItem(STORAGE_KEY);
+  }
+}
 
 // Contador para letras griegas en ángulos
 const letrasGriegas = ["α", "β", "γ", "δ", "ε", "ζ", "η", "θ", "ι", "κ", "λ", "μ"];
@@ -86,6 +139,12 @@ function parse(input) {
     return { tipo: "operacion", op: "escalar", a: matchEscalar[1], b: matchEscalar[2] };
   }
 
+  // División escalar: a / b
+  const matchDiv = entrada.match(/^([a-zA-Z_]\w*|\d+\.?\d*)\s*\/\s*([a-zA-Z_]\w*|\d+\.?\d*)$/);
+  if (matchDiv) {
+    return { tipo: "operacion", op: "division", a: matchDiv[1], b: matchDiv[2] };
+  }
+
   return { tipo: "error", msg: "Comando no reconocido. Escribí 'ayuda' para ver los comandos disponibles." };
 }
 
@@ -122,6 +181,7 @@ function ejecutar(parsed) {
     const existe = vectores.has(parsed.nombre);
     const v = new Vector(parsed.valores.length, parsed.valores);
     vectores.set(parsed.nombre, v);
+    guardarEstado();
     return { tipo: "vector", nombre: parsed.nombre, vector: v, sobreescrito: existe };
   }
 
@@ -135,6 +195,7 @@ function ejecutar(parsed) {
         case "vectorial": return ejecutarBinaria(parsed, "vectorial");
         case "proyeccion": return ejecutarProyeccion(parsed);
         case "escalar": return ejecutarEscalar(parsed);
+        case "division": return ejecutarBinaria(parsed, "division");
         case "modulo": return ejecutarModulo(parsed);
         case "angulo": return ejecutarAngulo(parsed);
         default: return { tipo: "error", msg: "Operación no implementada." };
@@ -150,8 +211,16 @@ function ejecutar(parsed) {
 function resolverOperando(token) {
   const num = parseFloat(token);
   if (!isNaN(num)) return { tipo: "numero", valor: num };
-  const v = obtenerVector(token);
-  return { tipo: "vector", valor: v };
+  try {
+    const v = obtenerVector(token);
+    return { tipo: "vector", valor: v };
+  } catch (e) {
+    // ¿Es un escalar guardado?
+    if (escalares.has(token)) {
+      return { tipo: "numero", valor: escalares.get(token) };
+    }
+    throw e;
+  }
 }
 
 function ejecutarBinaria(parsed, op) {
@@ -161,31 +230,54 @@ function ejecutarBinaria(parsed, op) {
   if (a.tipo === "error") throw new Error(a.msg);
   if (b.tipo === "error") throw new Error(b.msg);
 
+  const expr = `${parsed.a} ${simboloOp(op)} ${parsed.b}`;
+
+  // ── Operaciones escalar-escalar ──
+  if (a.tipo === "numero" && b.tipo === "numero") {
+    let resultado;
+    let nombreOp;
+    switch (op) {
+      case "suma":     resultado = a.valor + b.valor; nombreOp = "suma"; break;
+      case "resta":    resultado = a.valor - b.valor; nombreOp = "resta"; break;
+      case "escalar":  resultado = a.valor * b.valor; nombreOp = "mult"; break;
+      case "division": resultado = a.valor / b.valor; nombreOp = "div"; break;
+      case "punto":    throw new Error("El producto punto solo se hace entre vectores.");
+      case "vectorial":throw new Error("El producto vectorial solo se hace entre vectores en R³.");
+      default:         throw new Error("Operación no válida entre escalares.");
+    }
+    const nombreResultado = `${nombreOp}_${parsed.a}_${parsed.b}`;
+    return { tipo: "escalar", nombre: nombreResultado, valor: resultado, expr, operandos: [parsed.a, parsed.b], tarjeta: "escalar", escalarNota: "operación escalar" };
+  }
+
+  // ── Operaciones vector-vector ──
   let resultado;
   let nombreResultado;
-  const expr = `${parsed.a} ${simboloOp(op)} ${parsed.b}`;
 
   switch (op) {
     case "suma":
-      if (a.tipo !== "vector" || b.tipo !== "vector") throw new Error("La suma solo se puede hacer entre vectores.");
+      if (a.tipo !== "vector" || b.tipo !== "vector") throw new Error("La suma requiere dos vectores, o dos escalares. No se pueden mezclar.");
       resultado = sumaVectores(a.valor, b.valor);
       nombreResultado = `suma_${parsed.a}_${parsed.b}`;
-      return { tipo: "vector", nombre: nombreResultado, vector: resultado, expr, operandos: [parsed.a, parsed.b] };
+      return { tipo: "vector", nombre: nombreResultado, vector: resultado, expr, operandos: [parsed.a, parsed.b], vectorialNota: "operación vectorial" };
     case "resta":
-      if (a.tipo !== "vector" || b.tipo !== "vector") throw new Error("La resta solo se puede hacer entre vectores.");
+      if (a.tipo !== "vector" || b.tipo !== "vector") throw new Error("La resta requiere dos vectores, o dos escalares. No se pueden mezclar.");
       resultado = restaVectores(a.valor, b.valor);
       nombreResultado = `resta_${parsed.a}_${parsed.b}`;
-      return { tipo: "vector", nombre: nombreResultado, vector: resultado, expr, operandos: [parsed.a, parsed.b] };
+      return { tipo: "vector", nombre: nombreResultado, vector: resultado, expr, operandos: [parsed.a, parsed.b], vectorialNota: "operación vectorial" };
     case "punto":
-      if (a.tipo !== "vector" || b.tipo !== "vector") throw new Error("El producto punto solo se puede hacer entre vectores.");
+      if (a.tipo !== "vector" || b.tipo !== "vector") throw new Error("El producto punto solo se hace entre vectores.");
       resultado = productoPunto(a.valor, b.valor);
       nombreResultado = `punto_${parsed.a}_${parsed.b}`;
       return { tipo: "escalar", nombre: nombreResultado, valor: resultado, expr, operandos: [parsed.a, parsed.b] };
     case "vectorial":
-      if (a.tipo !== "vector" || b.tipo !== "vector") throw new Error("El producto vectorial solo se puede hacer entre vectores.");
+      if (a.tipo !== "vector" || b.tipo !== "vector") throw new Error("El producto vectorial solo se hace entre vectores en R³.");
       resultado = productoVectorial(a.valor, b.valor);
       nombreResultado = `cruz_${parsed.a}_${parsed.b}`;
-      return { tipo: "vector", nombre: nombreResultado, vector: resultado, expr, operandos: [parsed.a, parsed.b] };
+      return { tipo: "vector", nombre: nombreResultado, vector: resultado, expr, operandos: [parsed.a, parsed.b], vectorialNota: "operación vectorial" };
+    case "escalar":
+      throw new Error("El producto escalar requiere un vector y un número. Usá la forma 'vector * número'.");
+    case "division":
+      throw new Error("La división solo está definida entre escalares.");
     default:
       throw new Error("Operación binaria desconocida.");
   }
@@ -207,15 +299,20 @@ function ejecutarEscalar(parsed) {
 
   if (a.tipo === "vector" && b.tipo === "numero") {
     const resultado = escalarVector(a.valor, b.valor);
-    const nombreResultado = `esc_${parsed.a}`;
-    return { tipo: "vector", nombre: nombreResultado, vector: resultado, expr: `${parsed.a} * ${parsed.b}`, operandos: [parsed.a, String(parsed.b)] };
+    const nombreResultado = `${parsed.a}_${parsed.b}x`;
+    return { tipo: "vector", nombre: nombreResultado, vector: resultado, expr: `${parsed.a} * ${parsed.b}`, soloTarjeta: true };
   }
   if (a.tipo === "numero" && b.tipo === "vector") {
     const resultado = escalarVector(b.valor, a.valor);
-    const nombreResultado = `esc_${parsed.b}`;
-    return { tipo: "vector", nombre: nombreResultado, vector: resultado, expr: `${parsed.a} * ${parsed.b}`, operandos: [String(parsed.a), parsed.b] };
+    const nombreResultado = `${parsed.b}_${parsed.a}x`;
+    return { tipo: "vector", nombre: nombreResultado, vector: resultado, expr: `${parsed.a} * ${parsed.b}`, soloTarjeta: true };
   }
-  throw new Error("El producto escalar requiere un vector y un número.");
+  if (a.tipo === "numero" && b.tipo === "numero") {
+    const resultado = a.valor * b.valor;
+    const nombreResultado = `mult_${parsed.a}_${parsed.b}`;
+    return { tipo: "escalar", nombre: nombreResultado, valor: resultado, expr: `${parsed.a} * ${parsed.b}`, operandos: [parsed.a, parsed.b], tarjeta: "escalar", escalarNota: "operación escalar" };
+  }
+  throw new Error("El producto escalar requiere un vector y un número, o dos escalares.");
 }
 
 function ejecutarModulo(parsed) {
@@ -245,23 +342,43 @@ function ejecutarAngulo(parsed) {
 }
 
 function listarVectores() {
-  if (vectores.size === 0) return { tipo: "info", msg: "No hay vectores cargados." };
+  if (vectores.size === 0 && escalares.size === 0) return { tipo: "info", msg: "No hay vectores ni escalares cargados." };
   const lista = [];
   for (const [nombre, v] of vectores) {
     lista.push(`${nombre} = ${v.toString()} | módulo: ${v.modulo().toFixed(4)}`);
+  }
+  for (const [nombre, val] of escalares) {
+    lista.push(`${nombre} = ${val.toFixed(4)}  (escalar)`);
   }
   return { tipo: "info", msg: lista.join("\n") };
 }
 
 function borrarVector(nombre) {
-  if (!vectores.has(nombre)) return { tipo: "error", msg: `El vector "${nombre}" no existe.` };
-  vectores.delete(nombre);
-  eliminarTarjeta(nombre);
-  return { tipo: "info", msg: `Vector "${nombre}" eliminado.` };
+  if (vectores.has(nombre)) {
+    vectores.delete(nombre);
+    metas.delete(nombre);
+    // Borrar escalares derivados de este vector (mod_nombre)
+    for (const key of escalares.keys()) {
+      if (key === `mod_${nombre}`) { escalares.delete(key); metas.delete(key); }
+    }
+    guardarEstado();
+    eliminarTarjeta(nombre);
+    eliminarTarjeta(`vec_${nombre}`);
+    return { tipo: "info", msg: `Vector "${nombre}" eliminado.` };
+  }
+  if (escalares.has(nombre)) {
+    escalares.delete(nombre);
+    metas.delete(nombre);
+    guardarEstado();
+    eliminarTarjeta(nombre);
+    eliminarTarjeta(`vec_${nombre}`);
+    return { tipo: "info", msg: `Escalar "${nombre}" eliminado.` };
+  }
+  return { tipo: "error", msg: `"${nombre}" no existe.` };
 }
 
 function simboloOp(op) {
-  const map = { suma: "+", resta: "-", punto: ".", vectorial: "x", escalar: "*" };
+  const map = { suma: "+", resta: "-", punto: ".", vectorial: "x", escalar: "*", division: "/" };
   return map[op] || op;
 }
 
@@ -334,21 +451,42 @@ function manejarResultado(r) {
       if (r.operandos) {
         // Guardar el resultado como vector nombrado para poder citarlo después
         vectores.set(r.nombre, r.vector);
+        metas.set(r.nombre, { tarjeta: "vector", expr: r.expr, ops: r.operandos });
+        guardarEstado();
         log(`  → guardado como "${r.nombre}"`, "info");
         crearTarjetaOperacion("vector", r.nombre, `(${r.vector.x.join(", ")})`, mod, r.operandos, r.expr);
-      } else {
+      } else if (r.soloTarjeta) {
+        vectores.set(r.nombre, r.vector);
+        metas.set(r.nombre, { tarjeta: "escvec", expr: r.expr, ops: [] });
+        guardarEstado();
+        log(`  → guardado como "${r.nombre}"`, "info");
+        crearTarjetaVector(r.nombre, r.vector);
+      } else if (!r.expr || r.sobreescrito) {
+        metas.set(r.nombre, { tarjeta: "def", expr: "", ops: [] });
         crearTarjetaVector(r.nombre, r.vector);
       }
       break;
     }
 
     case "escalar": {
-      log(`${r.expr} = ${r.valor.toFixed(4)}`, "resultado");
+      const nota = r.escalarNota ? ` (${r.escalarNota})` : "";
+      log(`${r.expr} = ${r.valor.toFixed(4)}${nota}`, "resultado");
+      if (r.operandos) {
+        escalares.set(r.nombre, r.valor);
+        metas.set(r.nombre, { tarjeta: r.tarjeta || "punto", expr: r.expr, ops: r.operandos });
+        guardarEstado();
+        log(`  → guardado como "${r.nombre}"`, "info");
+        crearTarjetaOperacion(r.tarjeta || "punto", r.nombre, r.expr, r.valor, r.operandos, "");
+      }
       break;
     }
 
     case "modulo": {
       log(`${r.expr} = ${r.valor.toFixed(4)}`, "resultado");
+      log(`  → guardado como "${r.nombre}"`, "info");
+      escalares.set(r.nombre, r.valor);
+      metas.set(r.nombre, { tarjeta: "modulo", expr: r.expr, ops: [r.nombreVector] });
+      guardarEstado();
       crearTarjetaOperacion("modulo", r.nombre, r.vector.toString(), r.valor, [r.nombreVector], r.expr);
       break;
     }
@@ -367,14 +505,15 @@ function manejarResultado(r) {
 function mostrarAyuda() {
   const ayuda = [
     "── COMANDOS ──",
-    "$nombre(valores)  Definir vector    $v1(1,2,3)",
-    "a + b             Suma              v1 + v2",
-    "a - b             Resta             v1 - v2",
-    "a * n / n * a     Producto escalar  v1 * 3",
-    "a . b             Producto punto    v1 . v2",
-    "a x b             Prod. vectorial   v1 x v2",
+    "$nombre(valores)  Definir vector       $v1(1,2,3)",
+    "a + b / n + m     Suma (vect. o esc.)  v1 + v2",
+    "a - b / n - m     Resta                v1 - v2",
+    "a * n / n * a     Producto escalar     v1 * 3",
+    "a . b             Producto punto       v1 . v2",
+    "a x b             Prod. vectorial      v1 x v2",
     "a -> b            Proyección (a sobre b)",
-    "|a|               Módulo           |v1|",
+    "n / m             División escalar     10 / 3",
+    "|a|               Módulo              |v1|",
     "angulo a b        Ángulo entre vectores",
     "listar            Listar vectores cargados",
     "borrar nombre     Eliminar un vector",
@@ -389,6 +528,9 @@ function mostrarAyuda() {
 function init() {
   outputEl = document.getElementById("consola-output");
   inputEl = document.getElementById("consola-input");
+
+  // Restaurar vectores guardados de la sesión anterior
+  cargarEstado();
 
   inputEl.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
