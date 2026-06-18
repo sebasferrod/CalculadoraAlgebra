@@ -5,22 +5,54 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Calculadora de vectores</title>
     <link rel="stylesheet" href="estilo-calculadora-vectores.css">
-    <script type="module" src="src/algebra.js" defer></script>
-</head>   
+    <script type="module" src="src/consola.js" defer></script>
+</head>
 <body>
-    <div class="presentacion">
+    <header class="presentacion">
         <h1>Calculadora de Vectores</h1>
-        <p>Esta es una calculadora de vectores que permite realizar operaciones básicas como suma, resta y producto escalar.</p>
-    </div>
-    <div class="contenedor">
-        <div class="cargar-vector">
-            <label for="vector-input">Vector:</label>
-            <input type="text" id="vector-input" placeholder="Ejemplo: 1,2,3,4">
-            <button id="cargar-vector-btn">Cargar Vector</button>
+        <p>Calculadora interactiva de operaciones algebraicas con vectores: suma, resta, producto escalar, producto punto, producto vectorial, proyección y ángulo entre vectores. Cargá tus vectores desde la consola y operá con ellos.</p>
+    </header>
+
+    <main class="contenedor">
+        <section class="almacen-vectores">
+            <!-- Las tarjetas se generan dinámicamente -->
+        </section>
+    </main>
+
+    <section class="machete" id="machete">
+        <div class="machete-header">
+            <span>┌─ COMANDOS ─┐</span>
+            <button class="machete-toggle" id="machete-toggle" title="Ocultar comandos">▲</button>
         </div>
-        <div class="almacen-vectores">
-            
+        <div class="machete-body" id="machete-body">
+            <div class="machete-grid">
+                <div class="machete-col">
+                    <span class="cmd">$nombre(valores)</span> <span class="desc">Definir vector</span>
+                    <span class="cmd">a + b</span>            <span class="desc">Suma</span>
+                    <span class="cmd">a - b</span>            <span class="desc">Resta</span>
+                    <span class="cmd">a * n</span>            <span class="desc">Producto escalar</span>
+                    <span class="cmd">a . b</span>            <span class="desc">Producto punto</span>
+                    <span class="cmd">a x b</span>            <span class="desc">Prod. vectorial</span>
+                    <span class="cmd">a -> b</span>           <span class="desc">Proyección (a sobre b)</span>
+                </div>
+                <div class="machete-col">
+                    <span class="cmd">|a|</span>              <span class="desc">Módulo</span>
+                    <span class="cmd">angulo a b</span>       <span class="desc">Ángulo entre vectores</span>
+                    <span class="cmd">listar</span>           <span class="desc">Mostrar vectores</span>
+                    <span class="cmd">borrar nombre</span>    <span class="desc">Eliminar vector</span>
+                    <span class="cmd">limpiar</span>          <span class="desc">Limpiar consola</span>
+                    <span class="cmd">ayuda</span>            <span class="desc">Mostrar esta ayuda</span>
+                </div>
+            </div>
         </div>
-    </div>
+    </section>
+
+    <section class="consola" id="consola">
+        <div class="consola-output" id="consola-output"></div>
+        <div class="consola-input-linea">
+            <span class="consola-prompt">&gt;</span>
+            <input type="text" id="consola-input" class="consola-input" placeholder="Escribí un comando..." autofocus>
+        </div>
+    </section>
 </body>
 </html>

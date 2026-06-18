@@ -2,8 +2,8 @@ class Vector{
     constructor(dimensiones, valores = Array(dimensiones).fill(0)){
         this.x = new Array(dimensiones);
         for (let i = 0; i < dimensiones; i++){
-            // Redondeo resultado a 8 decimales para evitar problemas de precisión.
-            this.x[i] = valores[i];
+            // Redondeo a 8 decimales para evitar errores de precisión.
+            this.x[i] = this.#redondeoPresicion(valores[i]);
         }
     }
 
@@ -26,7 +26,7 @@ class Vector{
         }
         // Acaso aqui se crea un vector nuevo innecesariamente?
         let v = new Vector(this.getDimensiones(), v_esc);
-        return v_esc;
+        return v;
     }
 
     proyeccion(v){
@@ -52,12 +52,12 @@ class Vector{
             resultado_escalar = p / d;
                 // Redondeo resultado_escalar a 8 decimales para evitar problemas de precisión.
                 resultado_escalar = this.#redondeoPresicion(resultado_escalar);
-            return this.producoEscalar(resultado_escalar) // Se multiplica el vector director por el escalar obtenido al dividir el producto punto entre la magnitud al cuadrado del vector director.
+            return this.productoEscalar(resultado_escalar) // Se multiplica el vector director por el escalar obtenido al dividir el producto punto entre la magnitud al cuadrado del vector director.
         }
     }
 
     #redondeoPresicion(numero) {
-    return Math.round((numero + Number.EPSILON) * 100000000 / 100000000);
+    return Math.round((numero + Number.EPSILON) * 100000000) / 100000000;
 }
 
     toString(){
