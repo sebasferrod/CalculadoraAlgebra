@@ -392,6 +392,10 @@ function simboloOp(op) {
 
 let outputEl, inputEl;
 
+// Historial de comandos
+const historial = [];
+let posHistorial = -1;
+
 function log(texto, clase = "") {
   const linea = document.createElement("div");
   linea.className = clase;
@@ -418,8 +422,22 @@ function procesarEntrada() {
   log(`> ${entradaOriginal}`, "comando-usuario");
   inputEl.value = "";
 
+  // Guardar en historial
+  historial.push(entradaOriginal);
+  if (historial.length > 100) historial.shift();
+  posHistorial = historial.length;
+
   // ── Resolver paréntesis de adentro hacia afuera ──
   let entrada = entradaOriginal.trim();
+
+  // Saltar pre-procesador si es una definición de vector: $nombre(...)
+  if (/^\$[a-zA-Z_]\w*\(.+\)$/.test(entrada)) {
+    const parsed = parse(entrada);
+    const resultado = ejecutar(parsed);
+    if (resultado) manejarResultado(resultado);
+    return;
+  }
+
   let maxIter = 10; // protección contra bucles infinitos
   while (entrada.includes("(") && maxIter-- > 0) {
     const match = entrada.match(/\(([^()]+)\)/); // paréntesis más internos
@@ -583,6 +601,21 @@ function init() {
     if (e.key === "Enter") {
       e.preventDefault();
       procesarEntrada();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (posHistorial > 0) {
+        posHistorial--;
+        inputEl.value = historial[posHistorial];
+      }
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (posHistorial < historial.length - 1) {
+        posHistorial++;
+        inputEl.value = historial[posHistorial];
+      } else {
+        posHistorial = historial.length;
+        inputEl.value = "";
+      }
     }
   });
 
