@@ -223,6 +223,12 @@ function resolverOperando(token) {
   }
 }
 
+// Sanitiza tokens para nombres: reemplaza "-" por "neg" en números negativos
+function nom(token) {
+  if (!isNaN(parseFloat(token)) && token.includes("-")) return token.replace("-", "neg");
+  return token;
+}
+
 function ejecutarBinaria(parsed, op) {
   const a = resolverOperando(parsed.a);
   const b = resolverOperando(parsed.b);
@@ -245,7 +251,7 @@ function ejecutarBinaria(parsed, op) {
       case "vectorial":throw new Error("El producto vectorial solo se hace entre vectores en R³.");
       default:         throw new Error("Operación no válida entre escalares.");
     }
-    const nombreResultado = `${nombreOp}_${parsed.a}_${parsed.b}`;
+    const nombreResultado = `${nombreOp}_${nom(parsed.a)}_${nom(parsed.b)}`;
     return { tipo: "escalar", nombre: nombreResultado, valor: resultado, expr, operandos: [parsed.a, parsed.b], tarjeta: "escalar", escalarNota: "operación escalar" };
   }
 
@@ -299,17 +305,17 @@ function ejecutarEscalar(parsed) {
 
   if (a.tipo === "vector" && b.tipo === "numero") {
     const resultado = escalarVector(a.valor, b.valor);
-    const nombreResultado = `${parsed.a}_${parsed.b}x`;
+    const nombreResultado = `${nom(parsed.a)}_${nom(parsed.b)}x`;
     return { tipo: "vector", nombre: nombreResultado, vector: resultado, expr: `${parsed.a} * ${parsed.b}`, soloTarjeta: true };
   }
   if (a.tipo === "numero" && b.tipo === "vector") {
     const resultado = escalarVector(b.valor, a.valor);
-    const nombreResultado = `${parsed.b}_${parsed.a}x`;
+    const nombreResultado = `${nom(parsed.b)}_${nom(parsed.a)}x`;
     return { tipo: "vector", nombre: nombreResultado, vector: resultado, expr: `${parsed.a} * ${parsed.b}`, soloTarjeta: true };
   }
   if (a.tipo === "numero" && b.tipo === "numero") {
     const resultado = a.valor * b.valor;
-    const nombreResultado = `mult_${parsed.a}_${parsed.b}`;
+    const nombreResultado = `mult_${nom(parsed.a)}_${nom(parsed.b)}`;
     return { tipo: "escalar", nombre: nombreResultado, valor: resultado, expr: `${parsed.a} * ${parsed.b}`, operandos: [parsed.a, parsed.b], tarjeta: "escalar", escalarNota: "operación escalar" };
   }
   throw new Error("El producto escalar requiere un vector y un número, o dos escalares.");
