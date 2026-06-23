@@ -233,9 +233,11 @@ function resolverOperando(token) {
   }
 }
 
-// Sanitiza tokens para nombres: reemplaza "-" por "neg" en números negativos
+// Sanitiza tokens para nombres: reemplaza "-" por "neg" y "." por "p" en números
 function nom(token) {
-  if (!isNaN(parseFloat(token)) && token.includes("-")) return token.replace("-", "neg");
+  if (!isNaN(parseFloat(token))) {
+    return token.replace("-", "neg").replace(".", "p");
+  }
   return token;
 }
 
