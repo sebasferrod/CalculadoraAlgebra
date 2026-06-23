@@ -81,6 +81,14 @@ function parse(input) {
   const matchBorrar = entrada.match(/^borrar\s+([a-zA-Z_]\w*)$/);
   if (matchBorrar) return { tipo: "comando", cmd: "borrar", nombre: matchBorrar[1] };
 
+  // Renombrar: nombre: nuevo_nombre
+  const matchRenombrar = entrada.match(/^([a-zA-Z_]\w*)\s*:\s*([a-zA-Z_]\w*)$/);
+  if (matchRenombrar) return { tipo: "comando", cmd: "renombrar", nombre: matchRenombrar[1], nuevo: matchRenombrar[2] };
+
+  // Error si faltó el nuevo nombre: nombre:
+  const matchRenSin = entrada.match(/^([a-zA-Z_]\w*)\s*:\s*$/);
+  if (matchRenSin) return { tipo: "error", msg: "No se especificó nuevo nombre." };
+
   // Definición de vector: $nombre(valores)
   const matchDef = entrada.match(/^\$([a-zA-Z_]\w*)\(([^)]+)\)$/);
   if (matchDef) {
@@ -166,6 +174,8 @@ function ejecutar(parsed) {
         return listarVectores();
       case "borrar":
         return borrarVector(parsed.nombre);
+      case "renombrar":
+        return renombrarElemento(parsed.nombre, parsed.nuevo);
       case "limpiar":
         return { tipo: "limpiar" };
       case "ayuda":
@@ -383,6 +393,43 @@ function borrarVector(nombre) {
   return { tipo: "error", msg: `"${nombre}" no existe.` };
 }
 
+function renombrarElemento(viejo, nuevo) {
+  // Buscar en vectores
+  if (vectores.has(viejo)) {
+    const v = vectores.get(viejo);
+    const meta = metas.get(viejo) || {};
+    vectores.delete(viejo);
+    metas.delete(viejo);
+    vectores.set(nuevo, v);
+    metas.set(nuevo, meta);
+    guardarEstado();
+    eliminarTarjeta(viejo);
+    eliminarTarjeta(`vec_${viejo}`);
+    // Recrear tarjeta con nuevo nombre
+    if (meta.tarjeta === "def" || meta.tarjeta === "escvec") {
+      crearTarjetaVector(nuevo, v);
+    } else {
+      crearTarjetaOperacion("vector", nuevo, `(${v.x.join(", ")})`, v.modulo(), meta.ops, meta.expr);
+    }
+    return { tipo: "info", msg: `Vector "${viejo}" renombrado a "${nuevo}".` };
+  }
+  // Buscar en escalares
+  if (escalares.has(viejo)) {
+    const val = escalares.get(viejo);
+    const meta = metas.get(viejo) || {};
+    escalares.delete(viejo);
+    metas.delete(viejo);
+    escalares.set(nuevo, val);
+    metas.set(nuevo, meta);
+    guardarEstado();
+    eliminarTarjeta(viejo);
+    eliminarTarjeta(`vec_${viejo}`);
+    crearTarjetaOperacion(meta.tarjeta || "escalar", nuevo, meta.expr, val, meta.ops, "");
+    return { tipo: "info", msg: `Escalar "${viejo}" renombrado a "${nuevo}".` };
+  }
+  return { tipo: "error", msg: `"${viejo}" no existe.` };
+}
+
 function simboloOp(op) {
   const map = { suma: "+", resta: "-", punto: ".", vectorial: "x", escalar: "*", division: "/" };
   return map[op] || op;
@@ -582,6 +629,7 @@ function mostrarAyuda() {
     "angulo a b        Ángulo entre vectores",
     "listar            Listar vectores cargados",
     "borrar nombre     Eliminar un vector",
+    "nombre: nuevo     Renombrar elemento",
     "limpiar           Limpiar consola",
     "ayuda             Mostrar esta ayuda",
   ];
