@@ -89,6 +89,12 @@ function parse(input) {
   const matchRenSin = entrada.match(/^([a-zA-Z_]\w*)\s*:\s*$/);
   if (matchRenSin) return { tipo: "error", msg: "No se especificó nuevo nombre." };
 
+  // Definición de escalar: nombre = valor
+  const matchEscDef = entrada.match(/^([a-zA-Z_]\w*)\s*=\s*(-?\d+\.?\d*)$/);
+  if (matchEscDef) {
+    return { tipo: "definicion_escalar", nombre: matchEscDef[1], valor: parseFloat(matchEscDef[2]) };
+  }
+
   // Definición de vector: $nombre(valores)
   const matchDef = entrada.match(/^\$([a-zA-Z_]\w*)\(([^)]+)\)$/);
   if (matchDef) {
@@ -181,6 +187,17 @@ function ejecutar(parsed) {
       case "ayuda":
         return { tipo: "ayuda" };
     }
+  }
+
+  // Definición de escalar
+  if (parsed.tipo === "definicion_escalar") {
+    const existe = escalares.has(parsed.nombre) || vectores.has(parsed.nombre);
+    if (vectores.has(parsed.nombre)) return { tipo: "error", msg: `"${parsed.nombre}" ya existe como vector.` };
+    escalares.set(parsed.nombre, parsed.valor);
+    metas.set(parsed.nombre, { tarjeta: "escalar", expr: `${parsed.nombre} = ${parsed.valor}`, ops: [] });
+    guardarEstado();
+    crearTarjetaOperacion("escalar", parsed.nombre, `${parsed.nombre} = ${parsed.valor}`, parsed.valor, [], "");
+    return { tipo: "info", msg: `Escalar "${parsed.nombre}" = ${parsed.valor} guardado.` };
   }
 
   // Definición de vector
@@ -619,6 +636,7 @@ function manejarResultado(r) {
 function mostrarAyuda() {
   const ayuda = [
     "── COMANDOS ──",
+    "nombre = valor    Definir escalar      pi = 3.14",
     "$nombre(valores)  Definir vector       $v1(1,2,3)",
     "a + b / n + m     Suma (vect. o esc.)  v1 + v2",
     "a - b / n - m     Resta                v1 - v2",
