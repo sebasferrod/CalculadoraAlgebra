@@ -110,37 +110,37 @@ function parse(input) {
   }
 
   // Producto punto: a . b
-  const matchPunto = entrada.match(/^([a-zA-Z_]\w*|\d+\.?\d*)\s*\.\s*([a-zA-Z_]\w*|\d+\.?\d*)$/);
+  const matchPunto = entrada.match(/^([a-zA-Z_]\w*|-?\d+\.?\d*)\s*\.\s*([a-zA-Z_]\w*|-?\d+\.?\d*)$/);
   if (matchPunto) {
     return { tipo: "operacion", op: "punto", a: matchPunto[1], b: matchPunto[2] };
   }
 
   // Producto vectorial: a x b
-  const matchCruz = entrada.match(/^([a-zA-Z_]\w*|\d+\.?\d*)\s*x\s+([a-zA-Z_]\w*|\d+\.?\d*)$/);
+  const matchCruz = entrada.match(/^([a-zA-Z_]\w*|-?\d+\.?\d*)\s*x\s+([a-zA-Z_]\w*|-?\d+\.?\d*)$/);
   if (matchCruz) {
     return { tipo: "operacion", op: "vectorial", a: matchCruz[1], b: matchCruz[2] };
   }
 
   // Suma: a + b
-  const matchSuma = entrada.match(/^([a-zA-Z_]\w*|\d+\.?\d*)\s*\+\s*([a-zA-Z_]\w*|\d+\.?\d*)$/);
+  const matchSuma = entrada.match(/^([a-zA-Z_]\w*|-?\d+\.?\d*)\s*\+\s*([a-zA-Z_]\w*|-?\d+\.?\d*)$/);
   if (matchSuma) {
     return { tipo: "operacion", op: "suma", a: matchSuma[1], b: matchSuma[2] };
   }
 
   // Resta: a - b
-  const matchResta = entrada.match(/^([a-zA-Z_]\w*|\d+\.?\d*)\s*-\s*([a-zA-Z_]\w*|\d+\.?\d*)$/);
+  const matchResta = entrada.match(/^([a-zA-Z_]\w*|-?\d+\.?\d*)\s*-\s*([a-zA-Z_]\w*|-?\d+\.?\d*)$/);
   if (matchResta) {
     return { tipo: "operacion", op: "resta", a: matchResta[1], b: matchResta[2] };
   }
 
   // Producto escalar: a * n o n * a
-  const matchEscalar = entrada.match(/^([a-zA-Z_]\w*|\d+\.?\d*)\s*\*\s*([a-zA-Z_]\w*|\d+\.?\d*)$/);
+  const matchEscalar = entrada.match(/^([a-zA-Z_]\w*|-?\d+\.?\d*)\s*\*\s*([a-zA-Z_]\w*|-?\d+\.?\d*)$/);
   if (matchEscalar) {
     return { tipo: "operacion", op: "escalar", a: matchEscalar[1], b: matchEscalar[2] };
   }
 
   // División escalar: a / b
-  const matchDiv = entrada.match(/^([a-zA-Z_]\w*|\d+\.?\d*)\s*\/\s*([a-zA-Z_]\w*|\d+\.?\d*)$/);
+  const matchDiv = entrada.match(/^([a-zA-Z_]\w*|-?\d+\.?\d*)\s*\/\s*([a-zA-Z_]\w*|-?\d+\.?\d*)$/);
   if (matchDiv) {
     return { tipo: "operacion", op: "division", a: matchDiv[1], b: matchDiv[2] };
   }
@@ -406,11 +406,52 @@ function limpiarConsola() {
 }
 
 function procesarEntrada() {
-  const entrada = inputEl.value;
-  if (!entrada.trim()) return;
+  const entradaOriginal = inputEl.value;
+  if (!entradaOriginal.trim()) return;
 
-  log(`> ${entrada}`, "comando-usuario");
+  log(`> ${entradaOriginal}`, "comando-usuario");
   inputEl.value = "";
+
+  // ── Resolver paréntesis de adentro hacia afuera ──
+  let entrada = entradaOriginal.trim();
+  let maxIter = 10; // protección contra bucles infinitos
+  while (entrada.includes("(") && maxIter-- > 0) {
+    const match = entrada.match(/\(([^()]+)\)/); // paréntesis más internos
+    if (!match) break;
+    const interno = match[1].trim();
+    let reemplazo;
+
+    // ¿Es un número literal (incluyendo negativo)?
+    if (/^-?\d+\.?\d*$/.test(interno)) {
+      reemplazo = interno;
+    } else {
+      // Intentar parsear y ejecutar como expresión
+      const parsed = parse(interno);
+      const resultado = ejecutar(parsed);
+      if (resultado && resultado.tipo === "error") {
+        log(`  (error en paréntesis: ${resultado.msg})`, "error");
+        return;
+      }
+      if (resultado && resultado.tipo === "escalar") {
+        reemplazo = String(resultado.valor);
+      } else if (resultado && resultado.tipo === "vector") {
+        // Guardar temporalmente para poder referenciarlo
+        vectores.set(resultado.nombre, resultado.vector);
+        metas.set(resultado.nombre, { tarjeta: "vector", expr: interno, ops: [] });
+        guardarEstado();
+        reemplazo = resultado.nombre;
+      } else if (resultado && resultado.tipo === "modulo") {
+        escalares.set(resultado.nombre, resultado.valor);
+        metas.set(resultado.nombre, { tarjeta: "modulo", expr: resultado.expr, ops: [resultado.nombreVector] });
+        guardarEstado();
+        reemplazo = String(resultado.valor);
+      } else {
+        // No se pudo resolver, dejar como está
+        break;
+      }
+    }
+    entrada = entrada.replace(match[0], reemplazo);
+  }
 
   const parsed = parse(entrada);
   const resultado = ejecutar(parsed);
